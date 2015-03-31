@@ -70,7 +70,6 @@ def server():
                                    ca_certs = "ca.crt",   # must point to a file of CA certificates??
                                    do_handshake_on_connect = True,
                                    ciphers="!NULL:!EXPORT:AES256-SHA")
-        ssl_sock.
         clientthread = Thread(target=serverthread, args=(ssl_sock, clientaddr))
         clientthread.start()
 
