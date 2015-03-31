@@ -51,14 +51,21 @@ if not os.path.isfile(args.key):
 
 def send(data):
     clientsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        clientsock.connect((args.ip, port))
-        clientsock.send(data)
-    except:
-        print "Error connecting to the remote server. Guess it went offline"
-        os._exit(0)
-    # Connections must NEVER be persistent!
-    clientsock.close()
+    ssl_sock = ssl.wrap_socket(clientsock,
+                               keyfile = args.key,
+                               certfile = args.cert,
+                               server_side = False,
+                               cert_reqs = ssl.CERT_REQUIRED,
+                               ca_certs = "ca.crt",
+                               do_handshake_on_connect = True,
+                               ciphers="!NULL:!EXPORT:AES256-SHA")
+    #try:
+    ssl_sock.connect((args.serverIP, port))
+    ssl_sock.write(data)
+    #except:
+    #    print "Error connecting to the remote server. Guess it went offline"
+    #    os._exit(0)
+    ssl_sock.close()
 
 
 def cleanandexit():
@@ -86,3 +93,5 @@ def prompt():
     else:
         print "*** I could not understand the command you gave me. Valid commands are: ***"
         print "*** get, put, stop ***"
+
+prompt()

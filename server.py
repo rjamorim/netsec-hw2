@@ -44,8 +44,9 @@ if not os.path.isfile(args.key):
 
 
 
-def serverthread(clientsock, clientaddr):
-    receive = clientsock.recv(BUFSIZE)
+def serverthread(ssl_sock, clientaddr):
+    receive = ssl_sock.recv(BUFSIZE)
+    print ssl_sock.cipher()
     print receive
     #command = receive.split(' ', 1)
 
@@ -66,13 +67,11 @@ def server():
                                    server_side = True,
                                    # Require the client to provide a certificate
                                    cert_reqs = ssl.CERT_REQUIRED,
-                                   ssl_version = ssl.PROTOCOL_TLSv1,
                                    ca_certs = "ca.crt",   # must point to a file of CA certificates??
                                    do_handshake_on_connect = True,
                                    ciphers="!NULL:!EXPORT:AES256-SHA")
-
-        print ssl_sock.cipher()
-        clientthread = Thread(target=serverthread, args=(clientsock, clientaddr))
+        ssl_sock.
+        clientthread = Thread(target=serverthread, args=(ssl_sock, clientaddr))
         clientthread.start()
 
 
