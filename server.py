@@ -47,12 +47,11 @@ if not os.path.isfile(args.key):
 def serverthread(ssl_sock, clientaddr):
     global filename
     receive = ssl_sock.recv(BUFSIZE)
-    print ssl_sock.cipher()
-    data = receive.split(' ')
+    data = receive.split(' ', 1)
     if data[0] == "NAME":
         filename = data[1]
     elif data[0] == "FILE":
-        file = open(filename + ".server", "wb")
+        file = open("server" + os.sep + filename, "wb")
         file.write(data[1])
         while True:
             data = ssl_sock.recv(BUFSIZE)
@@ -62,13 +61,24 @@ def serverthread(ssl_sock, clientaddr):
             file.write(data)
         file.close()
     elif data[0] == "HASH":
-        file = open(filename + ".sha256", "wb")
+        file = open("server" + os.sep + filename + ".sha256", "wb")
         file.write(data[1])
         file.close()
+    elif data[0] == "GET":
+        try:
+            with open("server" + os.sep + data[1], 'rb') as f:
+                contents = f.read()
+        except:
+            ssl_sock.write("FILEERROR")
+            return
+        f.close()
+        with open("server" + os.sep + data[1] + ".sha256", 'rb') as f:
+            sha = f.read()
+        f.close()
+        ssl_sock.write(sha + contents)
     else:
         print "Unrecognized message. Something is very wrong"
-    print receive
-    #command = receive.split(' ', 1)
+    ssl_sock.close()
 
 
 serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -103,7 +113,6 @@ def main():
 # Signal handler that catches Ctrl-C and closes sockets before exiting
 def handler(signum, frame):
     print "Quitting: Signal handler called with signal " + str(signum)
-    # We send a specially crafted, impossible "clientaddr" to force the broadcast function to do our bidding
     serversocket.close()
     os._exit(0)
 

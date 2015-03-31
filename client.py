@@ -8,9 +8,10 @@ import os.path
 import ssl
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
-from Crypto.PublicKey import RSA
 from Crypto import Random
 
+# Configuration variables
+BUFSIZE = 1024
 
 # Here I take care of the command line arguments
 parser = argparse.ArgumentParser(description='Encrypts a file and sends it to a server.', add_help=True)
@@ -67,8 +68,8 @@ def readfile(filename):
 def sha256(plaintext):
     hashed = SHA256.new()
     hashed.update(plaintext)
-    print hashed.digest()
-    return hashed.digest()
+    print hashed.hexdigest()
+    return hashed.hexdigest()
 
 
 ## A routine to pad the message so that its size becomes a multiple of block_size
@@ -99,13 +100,44 @@ def send(data):
                                ca_certs = "ca.crt",
                                do_handshake_on_connect = True,
                                ciphers="!NULL:!EXPORT:AES256-SHA")
-    #try:
-    ssl_sock.connect((args.serverIP, port))
-    ssl_sock.write(data)
-    #except:
-    #    print "Error connecting to the remote server. Guess it went offline"
-    #    os._exit(0)
+    try:
+        ssl_sock.connect((args.serverIP, port))
+        ssl_sock.write(data)
+    except:
+        print "Error connecting to the remote server. Guess it went offline"
+        os._exit(0)
     ssl_sock.close()
+
+
+def receive(data):
+    contents = ""
+    filename = data.split(' ')
+    clientsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    ssl_sock = ssl.wrap_socket(clientsock,
+                               keyfile = args.key,
+                               certfile = args.cert,
+                               server_side = False,
+                               cert_reqs = ssl.CERT_REQUIRED,
+                               ca_certs = "ca.crt",
+                               do_handshake_on_connect = True,
+                               ciphers="!NULL:!EXPORT:AES256-SHA")
+    try:
+        ssl_sock.connect((args.serverIP, port))
+        ssl_sock.write(data)
+        ssl_sock.settimeout(1)
+        while True:
+            data = ssl_sock.recv(BUFSIZE)
+            if not data:  # Until data stops arriving
+                print "File arrived from server"
+                break
+            if data == "FILEERROR":
+                print "ERROR: The requested file does not exist at the server or can not be read"
+                ssl_sock.close()
+                prompt()
+            contents = contents + data
+    except:
+        pass
+    return contents
 
 
 def put(data):
@@ -114,15 +146,56 @@ def put(data):
     # First we read the filename
     plaintext = readfile(filename)
     #Now we compute the hash
-    hash = sha256(plaintext)
-    flag = toks[1] or "X"
+    sha = sha256(plaintext)
+    try:
+        flag = toks[1]
+    except:
+        print "You must use a flag N or E after the filename!"
+        prompt()
     if flag == "N":
         # What we do in case no encryption is applied
-        # First we send the filename
         send("NAME " + filename)
         send("FILE " + plaintext)
-        send("HASH " + hash)
+        send("HASH " + sha)
+        print "File " + filename + " successfully sent to server"
+        prompt()
+    elif flag == "E":
+        pwd = toks[2] or "X"
+        if len(pwd) != 8:
+            print "The encryption password must be exactly 8 characters long"
+            prompt()
+        ciphertext = encrypt(plaintext, pwd)
         print "bogus"
+    else:
+        print "You must use a flag N or E after the filename!"
+        prompt()
+
+
+def get(data):
+    toks = data.split(' ')
+    filename = toks[0]
+    try:
+        flag = toks[1]
+    except:
+        print "You must use a flag N or E after the filename!"
+        prompt()
+    if flag == "N":
+        # What we do in case we won't try to decrypt the file
+        contents = receive("GET " + filename)
+        sha_recv = contents[:64]
+        plaintext = contents[64:]
+        print sha_recv
+        print len(plaintext)
+        sha_file = sha256(plaintext)
+        if sha_recv == sha_file:
+            print "File successfully received and hash validated!"
+            file = open(filename, "wb")
+            file.write(plaintext)
+            file.close()
+        else:
+            print "File successfully received but hash not validated!"
+        print "File " + filename + " successfully received from server"
+        prompt()
     elif flag == "E":
         pwd = toks[2] or "X"
         if len(pwd) != 8:
@@ -150,7 +223,7 @@ def prompt():
     command = text.split(' ', 1)
 
     if command[0] == "get":
-        send("MESG " + command[1])
+        get(command[1])
     elif command[0] == "put":
         put(command[1])
     elif command[0] == "stop":
