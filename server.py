@@ -6,10 +6,10 @@ import argparse
 import socket
 import signal
 import time
+import ssl
 import os.path
 from threading import Thread
 #from OpenSSL.crypto import *
-import ssl
 
 # Configuration variables
 BUFSIZE = 1024
@@ -24,7 +24,7 @@ parser.add_argument('--key', dest = 'key', required = True, help = 'Server certi
 args = parser.parse_args()
 
 # Here I validate the server port
-if args.serverPort.isdigit():
+if args.port.isdigit():
     port = int(args.port)
     if port > 65535:
         print "ERROR: The port number is outside the acceptable range! (0-65535)"
@@ -44,10 +44,10 @@ if not os.path.isfile(args.key):
 
 
 
-
 def serverthread(clientsock, clientaddr):
     receive = clientsock.recv(BUFSIZE)
-    command = receive.split(' ', 1)
+    print receive
+    #command = receive.split(' ', 1)
 
 
 serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
