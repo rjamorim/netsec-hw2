@@ -13,6 +13,7 @@ from threading import Thread
 
 # Configuration variables
 BUFSIZE = 1024
+filename = ""
 
 # Here I take care of the command line arguments
 parser = argparse.ArgumentParser(description='Server that holds encrypted files.', add_help=True)
@@ -43,10 +44,29 @@ if not os.path.isfile(args.key):
     exit(1)
 
 
-
 def serverthread(ssl_sock, clientaddr):
+    global filename
     receive = ssl_sock.recv(BUFSIZE)
     print ssl_sock.cipher()
+    data = receive.split(' ')
+    if data[0] == "NAME":
+        filename = data[1]
+    elif data[0] == "FILE":
+        file = open(filename + ".server", "wb")
+        file.write(data[1])
+        while True:
+            data = ssl_sock.recv(BUFSIZE)
+            if not data: # Until data stops arriving
+                print "File arrived from client"
+                break
+            file.write(data)
+        file.close()
+    elif data[0] == "HASH":
+        file = open(filename + ".sha256", "wb")
+        file.write(data[1])
+        file.close()
+    else:
+        print "Unrecognized message. Something is very wrong"
     print receive
     #command = receive.split(' ', 1)
 
