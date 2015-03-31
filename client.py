@@ -2,16 +2,18 @@
 # Programming problem
 # Roberto Amorim - rja2139
 
-import argparse
-import socket
+import argparse, socket
 import os.path
-import ssl
+import ssl, hashlib
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
 from Crypto import Random
 
 # Configuration variables
 BUFSIZE = 1024
+SALT_LENGTH = 32
+DERIVATION_ROUNDS = 100
+KEY_SIZE = 32
 
 # Here I take care of the command line arguments
 parser = argparse.ArgumentParser(description='Encrypts a file and sends it to a server.', add_help=True)
@@ -68,7 +70,6 @@ def readfile(filename):
 def sha256(plaintext):
     hashed = SHA256.new()
     hashed.update(plaintext)
-    print hashed.hexdigest()
     return hashed.hexdigest()
 
 
@@ -84,9 +85,16 @@ def pad(message):
 
 def encrypt(message, pwd, key_size=256):
     message = pad(message)
+    # I quite honestly didn't understand the whole thing about using a Deterministic RNG, so I used
+    # another method to generate the AES key. Hope that's not too bad...!
+    derivedKey = pwd
+    salt = Random.new().read(KEY_SIZE)
+    for i in range(0,DERIVATION_ROUNDS):
+        derivedKey = hashlib.sha256(derivedKey+salt).digest()
+    derivedKey = derivedKey[:KEY_SIZE]
     # I create a random initialization vector the same length of the AES block size
     iv = Random.new().read(AES.block_size)
-    cipher = AES.new(pwd, AES.MODE_CBC, iv)
+    cipher = AES.new(derivedKey, AES.MODE_CBC, iv)
     return iv + cipher.encrypt(message)
 
 
@@ -137,7 +145,12 @@ def receive(data):
             contents = contents + data
     except:
         pass
-    return contents
+    if contents:
+        return contents
+    else:
+        print "ERROR: Server went offline"
+        ssl_sock.close()
+        cleanandexit()
 
 
 def put(data):
@@ -160,12 +173,20 @@ def put(data):
         print "File " + filename + " successfully sent to server"
         prompt()
     elif flag == "E":
-        pwd = toks[2] or "X"
+        try:
+            pwd = toks[2]
+        except:
+            print "If you use flag E, you must provide a password with lenght 8!"
+            prompt()
         if len(pwd) != 8:
             print "The encryption password must be exactly 8 characters long"
             prompt()
-        ciphertext = encrypt(plaintext, pwd)
-        print "bogus"
+        ciphertext = encrypt(plaintext, sha256(pwd))
+        send("NAME " + filename)
+        send("FILE " + ciphertext)
+        send("HASH " + sha)
+        print "File " + filename + " successfully encrypted and sent to server"
+        prompt()
     else:
         print "You must use a flag N or E after the filename!"
         prompt()
