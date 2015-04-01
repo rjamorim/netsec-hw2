@@ -3,8 +3,7 @@
 # Roberto Amorim - rja2139
 
 import argparse, socket
-import os.path
-import ssl, hashlib
+import os.path, ssl, hashlib
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
 from Crypto import Random
@@ -14,6 +13,7 @@ BUFSIZE = 1024
 SALT_LENGTH = 32
 DERIVATION_ROUNDS = 100
 KEY_SIZE = 32
+SALT = "h48slt$in@UN8bWt"
 
 # Here I take care of the command line arguments
 parser = argparse.ArgumentParser(description='Encrypts a file and sends it to a server.', add_help=True)
@@ -54,14 +54,14 @@ if not os.path.isfile(args.key):
 
 def readfile(filename):
     if not os.path.isfile(filename):
-        print "ERROR: Invalid file name for transfer"
+        print "ERROR: The file can not be sent"
         prompt()
     else:
         try:
             with open(filename, 'rb') as f:
                 plaintext = f.read()
         except IOError:
-            print "ERROR: File can not be read! You must provide a file for which you have read permissions"
+            print "ERROR: The file can not be sent"
             prompt()
         f.close()
     return plaintext
@@ -83,19 +83,37 @@ def pad(message):
     return message + (pad * padding)
 
 
-def encrypt(message, pwd, key_size=256):
+def encrypt(message, pwd):
     message = pad(message)
     # I quite honestly didn't understand the whole thing about using a Deterministic RNG, so I used
     # another method to generate the AES key. Hope that's not too bad...!
     derivedKey = pwd
-    salt = Random.new().read(KEY_SIZE)
     for i in range(0,DERIVATION_ROUNDS):
-        derivedKey = hashlib.sha256(derivedKey+salt).digest()
+        derivedKey = hashlib.sha256(derivedKey+SALT).digest()
     derivedKey = derivedKey[:KEY_SIZE]
     # I create a random initialization vector the same length of the AES block size
     iv = Random.new().read(AES.block_size)
     cipher = AES.new(derivedKey, AES.MODE_CBC, iv)
     return iv + cipher.encrypt(message)
+
+
+def decrypt(message, pwd):
+    iv = message[:AES.block_size]
+    derivedKey = pwd
+    for i in range(0,DERIVATION_ROUNDS):
+        derivedKey = hashlib.sha256(derivedKey+SALT).digest()
+    derivedKey = derivedKey[:KEY_SIZE]
+    ### Then we decrypt
+    try:
+        cipher = AES.new(derivedKey, AES.MODE_CBC, iv)
+        plaintext = cipher.decrypt(message[AES.block_size:])
+    except ValueError:
+        print "Invalid encrypted file size. There was either a transfer problem or the file has been tampered with."
+        return ""
+    ### Lets not forget to remove the padding!
+    pad = ord(plaintext[-1])
+    plaintext = plaintext[:-pad]
+    return plaintext
 
 
 def send(data):
@@ -139,7 +157,7 @@ def receive(data):
                 print "File arrived from server"
                 break
             if data == "FILEERROR":
-                print "ERROR: The requested file does not exist at the server or can not be read"
+                print "ERROR: The requested file can not be retrieved"
                 ssl_sock.close()
                 prompt()
             contents = contents + data
@@ -148,11 +166,12 @@ def receive(data):
     if contents:
         return contents
     else:
-        print "ERROR: Server went offline"
+        print "Error connecting to the remote server. Guess it went offlinee"
         ssl_sock.close()
         cleanandexit()
 
 
+# The function that is called when the command issued is put
 def put(data):
     toks = data.split(' ')
     filename = toks[0]
@@ -181,7 +200,7 @@ def put(data):
         if len(pwd) != 8:
             print "The encryption password must be exactly 8 characters long"
             prompt()
-        ciphertext = encrypt(plaintext, sha256(pwd))
+        ciphertext = encrypt(plaintext, pwd)
         send("NAME " + filename)
         send("FILE " + ciphertext)
         send("HASH " + sha)
@@ -192,6 +211,7 @@ def put(data):
         prompt()
 
 
+# The function that is called when the command issued is get
 def get(data):
     toks = data.split(' ')
     filename = toks[0]
@@ -203,32 +223,52 @@ def get(data):
     if flag == "N":
         # What we do in case we won't try to decrypt the file
         contents = receive("GET " + filename)
+        # The hash is prepended to the file - the first 64 bytes
         sha_recv = contents[:64]
         plaintext = contents[64:]
-        print sha_recv
-        print len(plaintext)
         sha_file = sha256(plaintext)
         if sha_recv == sha_file:
-            print "File successfully received and hash validated!"
             file = open(filename, "wb")
             file.write(plaintext)
             file.close()
+            print "File " + filename + " successfully received and hash validated!"
         else:
-            print "File successfully received but hash not validated!"
-        print "File " + filename + " successfully received from server"
+            print "File " + filename + " received but hash not validated!"
         prompt()
     elif flag == "E":
-        pwd = toks[2] or "X"
+        # What we do in case we  try to decrypt the file
+        try:
+            pwd = toks[2]
+        except:
+            print "If you use flag E, you must provide a password with lenght 8!"
+            prompt()
         if len(pwd) != 8:
             print "The encryption password must be exactly 8 characters long"
             prompt()
-        ciphertext = encrypt(plaintext, pwd)
-        print "bogus"
+        contents = receive("GET " + filename)
+        # The hash is prepended to the file - the first 64 bytes
+        sha_recv = contents[:64]
+        ciphertext = contents[64:]
+        # Here we decrypt the plaintext
+        plaintext = decrypt(ciphertext, pwd)
+        sha_file = sha256(plaintext)
+        if sha_recv == sha_file:
+            file = open(filename, "wb")
+            file.write(plaintext)
+            file.close()
+            print "File " + filename + " successfully received and hash validated!"
+        else:
+            file = open(filename, "wb")
+            file.write(plaintext)
+            file.close()
+            print "File " + filename + " received but hash not validated!"
+        prompt()
     else:
         print "You must use a flag N or E after the filename!"
         prompt()
 
 
+# If some cleanup code is ever needed before the program exits, it'll be placed here:
 def cleanandexit():
     os._exit(0)
 
@@ -252,8 +292,8 @@ def prompt():
     elif not command[0]:
         prompt()
     else:
-        print "*** I could not understand the command you gave me. Valid commands are: ***"
-        print "*** get, put, stop ***"
+        print "*** I could not understand the command you gave me ***"
+        print "      *** Valid commands are: get, put, stop ***"
         prompt()
 
 prompt()

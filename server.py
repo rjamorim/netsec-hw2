@@ -2,14 +2,9 @@
 # Programming problem
 # Roberto Amorim - rja2139
 
-import argparse
-import socket
-import signal
-import time
-import ssl
-import os.path
+import argparse, socket, signal
+import time, ssl, os.path
 from threading import Thread
-#from OpenSSL.crypto import *
 
 # Configuration variables
 BUFSIZE = 1024
