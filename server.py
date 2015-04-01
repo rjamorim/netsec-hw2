@@ -38,6 +38,9 @@ if not os.path.isfile(args.key):
     print "ERROR: Invalid file name certificate key"
     exit(1)
 
+if not os.path.exists("./server"):
+    os.makedirs("./server")
+
 
 def serverthread(ssl_sock, clientaddr):
     global filename

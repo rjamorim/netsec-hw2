@@ -25,6 +25,10 @@ hashing, mixed with a strong salt (128 bits) allows the system to defeat passwor
 as rainbow tables, as it would be unfeasible to compute a hash table both time-wise and space-wise.
 
 
+Server files are stored in the folder ./server (relative to where the script is run) to avoid file name
+conflicts in case the client is run from the same directory. If that folder does not exist, it is created.
+
+
 RUNNING THE PROGRAMS
 python server.py --port 2663 --cert server.crt --key server.key
 python client.py --server 127.0.0.1 --port 2663 --cert client.crt --key client.key

@@ -2,7 +2,7 @@
 # Programming problem
 # Roberto Amorim - rja2139
 
-import argparse, socket
+import argparse, socket, signal
 import os.path, ssl, hashlib
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
