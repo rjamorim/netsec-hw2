@@ -67,6 +67,7 @@ def readfile(filename):
     return plaintext
 
 
+# A simple routine that receives a plaintext and returns its SHA256 hash
 def sha256(plaintext):
     hashed = SHA256.new()
     hashed.update(plaintext)
@@ -83,13 +84,14 @@ def pad(message):
     return message + (pad * padding)
 
 
+# Encrypts data with the given password
 def encrypt(message, pwd):
     message = pad(message)
     # I quite honestly didn't understand the whole thing about using a Deterministic RNG, so I used
-    # another method to generate the AES key. Hope that's not too bad...!
+    # another method to generate the AES key. Hope that's not too bad...! (see readme)
     derivedKey = pwd
     for i in range(0,DERIVATION_ROUNDS):
-        derivedKey = hashlib.sha256(derivedKey+SALT).digest()
+        derivedKey = hashlib.sha256(derivedKey + SALT).digest()
     derivedKey = derivedKey[:KEY_SIZE]
     # I create a random initialization vector the same length of the AES block size
     iv = Random.new().read(AES.block_size)
@@ -97,11 +99,13 @@ def encrypt(message, pwd):
     return iv + cipher.encrypt(message)
 
 
+# Decrypts data with the given password
 def decrypt(message, pwd):
     iv = message[:AES.block_size]
+    # First we hash the password a lot, repeating the encryption steps
     derivedKey = pwd
     for i in range(0,DERIVATION_ROUNDS):
-        derivedKey = hashlib.sha256(derivedKey+SALT).digest()
+        derivedKey = hashlib.sha256(derivedKey + SALT).digest()
     derivedKey = derivedKey[:KEY_SIZE]
     ### Then we decrypt
     try:
@@ -116,6 +120,7 @@ def decrypt(message, pwd):
     return plaintext
 
 
+# The function that sands data to the server
 def send(data):
     clientsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     ssl_sock = ssl.wrap_socket(clientsock,
@@ -135,6 +140,7 @@ def send(data):
     ssl_sock.close()
 
 
+# The function that receives data from the server
 def receive(data):
     contents = ""
     filename = data.split(' ')
@@ -154,7 +160,6 @@ def receive(data):
         while True:
             data = ssl_sock.recv(BUFSIZE)
             if not data:  # Until data stops arriving
-                print "File arrived from server"
                 break
             if data == "FILEERROR":
                 print "ERROR: The requested file can not be retrieved"
@@ -201,6 +206,7 @@ def put(data):
             print "The encryption password must be exactly 8 characters long"
             prompt()
         ciphertext = encrypt(plaintext, pwd)
+        # With everything done, we send the stuff to the server
         send("NAME " + filename)
         send("FILE " + ciphertext)
         send("HASH " + sha)
@@ -228,6 +234,7 @@ def get(data):
         plaintext = contents[64:]
         sha_file = sha256(plaintext)
         if sha_recv == sha_file:
+            # If the hashes match, we are successful! Cheers
             file = open(filename, "wb")
             file.write(plaintext)
             file.close()
@@ -253,14 +260,12 @@ def get(data):
         plaintext = decrypt(ciphertext, pwd)
         sha_file = sha256(plaintext)
         if sha_recv == sha_file:
+            # If the hashes match, we are successful! Cheers
             file = open(filename, "wb")
             file.write(plaintext)
             file.close()
             print "File " + filename + " successfully received and hash validated!"
         else:
-            file = open(filename, "wb")
-            file.write(plaintext)
-            file.close()
             print "File " + filename + " received but hash not validated!"
         prompt()
     else:

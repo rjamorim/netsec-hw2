@@ -38,30 +38,35 @@ if not os.path.isfile(args.key):
     print "ERROR: Invalid file name certificate key"
     exit(1)
 
+# We create a ./server folder if it does not exist, to hold server files
 if not os.path.exists("./server"):
     os.makedirs("./server")
 
 
+# This is a thread that takes care of all communications and data processing within the server
 def serverthread(ssl_sock, clientaddr):
     global filename
     receive = ssl_sock.recv(BUFSIZE)
     data = receive.split(' ', 1)
+
     if data[0] == "NAME":
         filename = data[1]
+
     elif data[0] == "FILE":
         file = open("server" + os.sep + filename, "wb")
         file.write(data[1])
         while True:
             data = ssl_sock.recv(BUFSIZE)
-            if not data: # Until data stops arriving
-                print "File arrived from client"
+            if not data:  # Until data stops arriving
                 break
             file.write(data)
         file.close()
+
     elif data[0] == "HASH":
         file = open("server" + os.sep + filename + ".sha256", "wb")
         file.write(data[1])
         file.close()
+
     elif data[0] == "GET":
         try:
             with open("server" + os.sep + data[1], 'rb') as f:
@@ -73,7 +78,9 @@ def serverthread(ssl_sock, clientaddr):
         with open("server" + os.sep + data[1] + ".sha256", 'rb') as f:
             sha = f.read()
         f.close()
+        # We return the hash concatenated with the file
         ssl_sock.write(sha + contents)
+
     else:
         print "Unrecognized message. Something is very wrong"
     ssl_sock.close()
@@ -93,9 +100,9 @@ def server():
                                    keyfile = args.key,
                                    certfile = args.cert,
                                    server_side = True,
-                                   # Require the client to provide a certificate
+                                   # Require the client to provide a certificate. VERY IMPORTANT
                                    cert_reqs = ssl.CERT_REQUIRED,
-                                   ca_certs = "ca.crt",   # must point to a file of CA certificates??
+                                   ca_certs = "ca.crt",
                                    do_handshake_on_connect = True,
                                    ciphers="!NULL:!EXPORT:AES256-SHA")
         clientthread = Thread(target=serverthread, args=(ssl_sock, clientaddr))
@@ -108,7 +115,7 @@ def main():
     clientservthread.start()
 
 
-# Signal handler that catches Ctrl-C and closes sockets before exiting
+# Signal handler that catches Ctrl-C and closes the socket before exiting
 def handler(signum, frame):
     print "Quitting: Signal handler called with signal " + str(signum)
     serversocket.close()
